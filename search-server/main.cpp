@@ -16,6 +16,9 @@ using namespace std;
 // максимальное число документов в поисковой выдаче
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
+// точность для переменных с плавающей точкой
+const double EPSILON = 1e-6;
+
 // считывает строку целиком, от начала до символа новой строки
 string ReadLine() {
     string str;
@@ -81,10 +84,7 @@ public:
     }
 
     // добавляет сведения о документе в хранилище
-    void AddDocument(int document_id,
-					 const string& document,
-					 DocumentStatus status,
-					 const vector<int>& ratings) {
+    void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inverted_word_count = 1.0 / words.size();
         for (const string& word : words) {
@@ -105,11 +105,7 @@ public:
     // возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска с фильтрацией по статусу
     vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus status) const {
         return FindTopDocuments(raw_query,
-        		[status](int document_id, DocumentStatus document_status, int rating) {
-                    // этот дурной if здесь, чтобы обрулить директиву компиллятора -Werror
-                    if (document_id && rating) {
-                        return document_status == status;
-                    }
+        		[status](int, DocumentStatus document_status, int) {
                     return document_status == status;
         		});
     }
@@ -120,14 +116,13 @@ public:
         const Query query = ParseQuery(raw_query);
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
-        sort(matched_documents.begin(), matched_documents.end(),
-             [](const Document& lhs, const Document& rhs) {
-        		if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
-                    return lhs.rating > rhs.rating;
-                } else {
-                    return lhs.relevance > rhs.relevance;
-                }
-             });
+        sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs) {
+        	if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
+        		return lhs.rating > rhs.rating;
+        	} else {
+        		return lhs.relevance > rhs.relevance;
+        	}
+        });
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
             matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
         }
@@ -399,14 +394,13 @@ void TestMatchDocument() {
 void TestSortByRelevance() {
     SearchServer server;
     server.SetStopWords("и в на"s);
-    server.AddDocument(0, "белый кот и модный ошейник"s,        DocumentStatus::ACTUAL, {8, -3});
-    server.AddDocument(1, "пушистый кот пушистый хвост"s,       DocumentStatus::ACTUAL, {7, 2, 7});
+    server.AddDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {8, -3});
+    server.AddDocument(1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {7, 2, 7});
     server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
-    server.AddDocument(3, "ухоженный скворец евгений"s,         DocumentStatus::BANNED, {9});
+    server.AddDocument(3, "ухоженный скворец евгений"s, DocumentStatus::BANNED, {9});
     auto search_result = server.FindTopDocuments("пушистый ухоженный кот"s);
 
     // проверка вычисления релевантности
-    const double EPSILON = 1e-6;
     ASSERT_HINT(abs(search_result[0].relevance - 0.866434) < EPSILON, "Relevance calculation error"s);
     ASSERT_HINT(abs(search_result[2].relevance - 0.173287) < EPSILON, "Relevance calculation error"s);
 
@@ -419,33 +413,55 @@ void TestSortByRelevance() {
 // Тест проверяет, что поисковая система правильно вычисляет рейтинг документа
 void TestComputeRating() {
     SearchServer server;
-    server.AddDocument(0, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
+    server.AddDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {8, 3, -3});
+    server.AddDocument(1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {});
+    server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
     auto search_result = server.FindTopDocuments("пушистый ухоженный кот"s);
-    ASSERT_EQUAL_HINT(search_result[0].rating, -1, "Rating calculation error"s);
+
+    // если рейтингов у документа нет, то средний рейтинг должен быть равен 0
+    ASSERT_EQUAL_HINT(search_result[0].rating, 0, "Rating calculation error"s);
+
+    // общий случай, отрицательный средний рейтинг
+    ASSERT_EQUAL_HINT(search_result[1].rating, -1, "Rating calculation error"s);
+
+    // случай, когда сумма рейтингов не делится без остатка на их количество, должна возвращаться целая часть частного
+    ASSERT_EQUAL_HINT(search_result[2].rating, 2, "Rating calculation error"s);
 }
 
 // Тест проверяет, что поисковая система правильно учитывает статусы документов
 void TestSearchWithStatus() {
     SearchServer server;
-    server.AddDocument(0, "белый кот и модный ошейник"s, DocumentStatus::BANNED, {8, -3});
+    server.AddDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {8, -3});
+    server.AddDocument(1, "пушистый кот пушистый хвост"s, DocumentStatus::IRRELEVANT, {7, 2, 7});
+    server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::REMOVED, {5, -12, 2, 1});
+    server.AddDocument(3, "ухоженный скворец евгений"s, DocumentStatus::BANNED, {9});
 
     // поиск без явно указанного рейтинга не должен возвращать документы с рейтингом не равным умолчанию (ACTUAL)
-    ASSERT_HINT(server.FindTopDocuments("пушистый ухоженный кот"s).empty(), "No results must be returned for the query"s);
+    ASSERT_HINT(server.FindTopDocuments("пушистый ухоженный крот"s).empty(), "No results must be returned for the query"s);
 
-    // при явном указании рейтинга поиск должен вернуть подходящий документ
-    auto search_result = server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED);
+    // при явном указании рейтинга поиск должен возвращать подходящий документ
+    auto search_result = server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::ACTUAL);
     ASSERT_EQUAL_HINT(search_result.size(), 1, "Found documents count is incorrect"s);
     ASSERT_EQUAL_HINT(search_result[0].id, 0, "Wrong document found"s);
+    search_result = server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::IRRELEVANT);
+    ASSERT_EQUAL_HINT(search_result.size(), 1, "Found documents count is incorrect"s);
+    ASSERT_EQUAL_HINT(search_result[0].id, 1, "Wrong document found"s);
+    search_result = server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::REMOVED);
+    ASSERT_EQUAL_HINT(search_result.size(), 1, "Found documents count is incorrect"s);
+    ASSERT_EQUAL_HINT(search_result[0].id, 2, "Wrong document found"s);
+    search_result = server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED);
+    ASSERT_EQUAL_HINT(search_result.size(), 1, "Found documents count is incorrect"s);
+    ASSERT_EQUAL_HINT(search_result[0].id, 3, "Wrong document found"s);
 }
 
 // Тест проверяет, что поисковая система правильно выполняет поиск с использованием пользовательского предиката
 void TestSearchWithPredicate() {
     SearchServer server;
     server.SetStopWords("и в на"s);
-    server.AddDocument(0, "белый кот и модный ошейник"s,        DocumentStatus::ACTUAL, {8, -3});
-    server.AddDocument(1, "пушистый кот пушистый хвост"s,       DocumentStatus::ACTUAL, {7, 2, 7});
+    server.AddDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {8, -3});
+    server.AddDocument(1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {7, 2, 7});
     server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
-    server.AddDocument(3, "ухоженный скворец евгений"s,         DocumentStatus::BANNED, {9});
+    server.AddDocument(3, "ухоженный скворец евгений"s, DocumentStatus::BANNED, {9});
     auto search_result = server.FindTopDocuments("пушистый ухоженный кот"s,
         // предикат: только актуальные документы, только отрицательный рейтинг, только четные document_id
         [](int document_id, DocumentStatus status, int rating) {
