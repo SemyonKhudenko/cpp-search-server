@@ -104,10 +104,9 @@ public:
 
     // возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска с фильтрацией по статусу
     vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus status) const {
-        return FindTopDocuments(raw_query,
-        		[status](int, DocumentStatus document_status, int) {
-                    return document_status == status;
-        		});
+        return FindTopDocuments(raw_query, [status](int, DocumentStatus document_status, int) {
+        	return document_status == status;
+        });
     }
 
     // возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска с фильтрацией посредством функции-предиката
