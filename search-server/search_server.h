@@ -6,12 +6,14 @@
 
 #include <cmath>
 #include <map>
+#include <numeric>
 #include <set>
 #include <vector>
 
 using namespace std::string_literals;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double EPSILON = 1e-6;
 
 class SearchServer {
 public:
@@ -24,11 +26,7 @@ public:
         }
     }
 
-    explicit SearchServer(const std::string& stop_words_text)
-        : SearchServer(SplitIntoWords(stop_words_text))  // Invoke delegating constructor
-                                                         // from string container
-    {
-    }
+    explicit SearchServer(const std::string& stop_words_text);
 
     void AddDocument(int document_id, const std::string& document, DocumentStatus status, const std::vector<int>& ratings);
 
@@ -39,7 +37,7 @@ public:
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
         sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs) {
-            if (std::abs(lhs.relevance - rhs.relevance) < 1e-6) {
+            if (std::abs(lhs.relevance - rhs.relevance) < EPSILON) {
                 return lhs.rating > rhs.rating;
             } else {
                 return lhs.relevance > rhs.relevance;
@@ -52,24 +50,10 @@ public:
         return matched_documents;
     }
 
-    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentStatus status) const {
-        return FindTopDocuments(raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
-            return document_status == status;
-        });
-    }
-
-    std::vector<Document> FindTopDocuments(const std::string& raw_query) const {
-        return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
-    }
-
-    int GetDocumentCount() const {
-        return documents_.size();
-    }
-
-    int GetDocumentId(int index) const {
-        return document_ids_.at(index);
-    }
-
+    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentStatus status) const;
+    std::vector<Document> FindTopDocuments(const std::string& raw_query) const;
+    int GetDocumentCount() const;
+    int GetDocumentId(int index) const;
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
 
 private:
@@ -77,34 +61,16 @@ private:
         int rating;
         DocumentStatus status;
     };
+
     const std::set<std::string> stop_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     std::map<int, DocumentData> documents_;
     std::vector<int> document_ids_;
 
-    bool IsStopWord(const std::string& word) const {
-        return stop_words_.count(word) > 0;
-    }
-
-    static bool IsValidWord(const std::string& word) {
-        // A valid word must not contain special characters
-        return none_of(word.begin(), word.end(), [](char c) {
-            return c >= '\0' && c < ' ';
-        });
-    }
-
+    bool IsStopWord(const std::string& word) const;
+    static bool IsValidWord(const std::string& word);
     std::vector<std::string> SplitIntoWordsNoStop(const std::string& text) const;
-
-    static int ComputeAverageRating(const std::vector<int>& ratings) {
-        if (ratings.empty()) {
-            return 0;
-        }
-        int rating_sum = 0;
-        for (const int rating : ratings) {
-            rating_sum += rating;
-        }
-        return rating_sum / static_cast<int>(ratings.size());
-    }
+    static int ComputeAverageRating(const std::vector<int>& ratings);
 
     struct QueryWord {
         std::string data;

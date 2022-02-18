@@ -2,6 +2,12 @@
 
 using namespace std;
 
+SearchServer::SearchServer(const std::string& stop_words_text)
+    : SearchServer(SplitIntoWords(stop_words_text))  // Invoke delegating constructor
+                                                     // from string container
+{
+}
+
 void SearchServer::AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
     if ((document_id < 0) || (documents_.count(document_id) > 0)) {
         throw invalid_argument("Invalid document_id"s);
@@ -14,6 +20,24 @@ void SearchServer::AddDocument(int document_id, const string& document, Document
     }
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
     document_ids_.push_back(document_id);
+}
+
+vector<Document> SearchServer::FindTopDocuments(const string& raw_query, DocumentStatus status) const {
+    return FindTopDocuments(raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
+        return document_status == status;
+    });
+}
+
+vector<Document> SearchServer::FindTopDocuments(const string& raw_query) const {
+    return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
+}
+
+int SearchServer::GetDocumentCount() const {
+    return documents_.size();
+}
+
+int SearchServer::GetDocumentId(int index) const {
+    return document_ids_.at(index);
 }
 
 tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& raw_query, int document_id) const {
@@ -40,6 +64,17 @@ tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& 
     return {matched_words, documents_.at(document_id).status};
 }
 
+bool SearchServer::IsStopWord(const string& word) const {
+    return stop_words_.count(word) > 0;
+}
+
+bool SearchServer::IsValidWord(const string& word) {
+    // A valid word must not contain special characters
+    return none_of(word.begin(), word.end(), [](char c) {
+        return c >= '\0' && c < ' ';
+    });
+}
+
 vector<string> SearchServer::SplitIntoWordsNoStop(const string& text) const {
     vector<string> words;
     for (const string& word : SplitIntoWords(text)) {
@@ -51,6 +86,13 @@ vector<string> SearchServer::SplitIntoWordsNoStop(const string& text) const {
         }
     }
     return words;
+}
+
+int SearchServer::ComputeAverageRating(const std::vector<int>& ratings) {
+	if (ratings.empty()) {
+		return 0;
+	}
+	return accumulate(ratings.begin(), ratings.end(), 0) / static_cast<int>(ratings.size());
 }
 
 SearchServer::QueryWord SearchServer::ParseQueryWord(const string& text) const {
@@ -87,7 +129,7 @@ SearchServer::Query SearchServer::ParseQuery(const string& text) const {
 
 // Existence required
 double SearchServer::ComputeWordInverseDocumentFreq(const string& word) const {
-    return std::log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
+    return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
 }
 
 void PrintMatchDocumentResult(int document_id, const vector<string>& words, DocumentStatus status) {
