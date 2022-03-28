@@ -2,6 +2,7 @@
 
 using namespace std;
 
+// возвращает вектор, содержащий все слова из переданной строки
 vector<string> SplitIntoWords(const string& text) {
     vector<string> words;
     string word;

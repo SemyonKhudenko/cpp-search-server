@@ -12,7 +12,10 @@
 
 using namespace std::string_literals;
 
+// максимальное число документов в поисковой выдаче
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+
+// точность для переменных с плавающей точкой
 const double EPSILON = 1e-6;
 
 class SearchServer {
@@ -30,6 +33,7 @@ public:
 
     void AddDocument(int document_id, const std::string& document, DocumentStatus status, const std::vector<int>& ratings);
 
+    // возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска с фильтрацией посредством функции-предиката
     template <typename DocumentPredicate>
     std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentPredicate document_predicate) const {
         const auto query = ParseQuery(raw_query);
@@ -53,8 +57,12 @@ public:
     std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentStatus status) const;
     std::vector<Document> FindTopDocuments(const std::string& raw_query) const;
     int GetDocumentCount() const;
-    int GetDocumentId(int index) const;
+    // int GetDocumentId(int index) const;
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
+    const std::vector<int>::const_iterator begin() const;
+    const std::vector<int>::const_iterator end() const;
+    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    void RemoveDocument(int document_id);
 
 private:
     struct DocumentData {
@@ -64,6 +72,7 @@ private:
 
     const std::set<std::string> stop_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
+    std::map<int, std::map<std::string, double>> document_id_to_word_freqs_;
     std::map<int, DocumentData> documents_;
     std::vector<int> document_ids_;
 

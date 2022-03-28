@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+// возможные статусы документов
 enum class DocumentStatus {
     ACTUAL,
     IRRELEVANT,
@@ -9,6 +10,7 @@ enum class DocumentStatus {
     REMOVED,
 };
 
+// формат, в котором  возвращаются результаты поиска
 struct Document {
     Document() = default;
 
