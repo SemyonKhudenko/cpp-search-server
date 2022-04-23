@@ -4,8 +4,8 @@ using namespace std;
 
 void RemoveDuplicates(SearchServer& search_server) {
     vector<int> duplicate_ids;
-    set<vector<string>> set_document_words;
-    vector<string> document_words;
+    set<vector<string_view>> set_document_words;
+    vector<string_view> document_words;
     for (const auto& document_id : search_server) {
         document_words.clear();
 

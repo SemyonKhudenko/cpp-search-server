@@ -2,7 +2,7 @@
 
 using namespace std;
 
-LogDuration::LogDuration(const string& id, ostream& out)
+LogDuration::LogDuration(const string_view id, ostream& out)
     : id_(id)
     , out_(out) {
 }

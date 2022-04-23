@@ -1,6 +1,7 @@
 #pragma once
 
 #include "search_server.h"
+#include "process_queries.h"
 #include "request_queue.h"
 
 #include <iostream>

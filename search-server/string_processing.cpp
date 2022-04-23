@@ -3,22 +3,16 @@
 using namespace std;
 
 // возвращает вектор, содержащий все слова из переданной строки
-vector<string> SplitIntoWords(const string& text) {
-    vector<string> words;
-    string word;
-    for (const char c : text) {
-        if (c == ' ') {
-            if (!word.empty()) {
-                words.push_back(word);
-                word.clear();
-            }
+vector<string_view> SplitIntoWords(string_view text) {
+    vector<string_view> result;
+    while (true) {
+        auto pos_space = text.find(' ');
+        result.push_back(text.substr(0, pos_space));
+        if (pos_space == text.npos) {
+            break;
         } else {
-            word += c;
+            text.remove_prefix(pos_space + 1);
         }
     }
-    if (!word.empty()) {
-        words.push_back(word);
-    }
-
-    return words;
+    return result;
 }
