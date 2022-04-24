@@ -22,13 +22,14 @@ void SearchServer::AddDocument(int document_id, const string_view document, Docu
     const auto words = SplitIntoWordsNoStop(document);
 
     const double inv_word_count = 1.0 / words.size();
+	unordered_set<std::string> words_values;
     for (const string_view word : words) {
-        auto it = words_values_.emplace(string(word));
+        auto it = words_values.emplace(string(word));
         string_view word_view = *it.first;
         word_to_document_freqs_[word_view][document_id] += inv_word_count;
         document_id_to_word_freqs_[document_id][word_view] += inv_word_count;
     }
-    documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
+    documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status, move(words_values) });
     document_ids_.insert(document_id);
 }
 
@@ -40,38 +41,10 @@ vector<Document> SearchServer::FindTopDocuments(const string_view raw_query, Doc
     });
 }
 
-// возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска с фильтрацией по статусу
-// последовательная версия
-vector<Document> SearchServer::FindTopDocuments(const execution::sequenced_policy&, const string_view raw_query, DocumentStatus status) const {
-    return FindTopDocuments(execution::seq, raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
-        return document_status == status;
-    });
-}
-
-// возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска с фильтрацией по статусу
-// параллельная версия
-vector<Document> SearchServer::FindTopDocuments(const execution::parallel_policy&, const string_view raw_query, DocumentStatus status) const {
-    return FindTopDocuments(execution::par, raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
-        return document_status == status;
-    });
-}
-
 // возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска
 // версия с не определенной ExecutionPolicy просто вызывает последовательную
 vector<Document> SearchServer::FindTopDocuments(const string_view raw_query) const {
     return FindTopDocuments(execution::seq, raw_query, DocumentStatus::ACTUAL);
-}
-
-// возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска
-// последовательная версия
-vector<Document> SearchServer::FindTopDocuments(const execution::sequenced_policy&, const string_view raw_query) const {
-    return FindTopDocuments(execution::seq, raw_query, DocumentStatus::ACTUAL);
-}
-
-// возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска
-// параллельная версия
-vector<Document> SearchServer::FindTopDocuments(const execution::parallel_policy&, const string_view raw_query) const {
-    return FindTopDocuments(execution::par, raw_query, DocumentStatus::ACTUAL);
 }
 
 // возвращает общее количество документов
@@ -85,7 +58,7 @@ tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(const str
 }
 
 tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(const execution::sequenced_policy&, const string_view raw_query, int document_id) const {
-    const auto query = ParseQuery(raw_query);
+    const auto query = ParseQuery(raw_query, true);
     for (const string_view word : query.minus_words) {
         if (word_to_document_freqs_.at(word).count(document_id)) {
             return { vector<string_view>(), documents_.at(document_id).status };
@@ -203,7 +176,7 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(string_view text) const {
 }
 
 // парсинг поискового запроса
-SearchServer::Query SearchServer::ParseQuery(const string_view text) const {
+SearchServer::Query SearchServer::ParseQuery(const string_view text, bool uniquify /*= false*/) const {
     Query result;
     for (const string_view word : SplitIntoWords(text)) {
         const auto query_word = ParseQueryWord(word);
@@ -215,10 +188,12 @@ SearchServer::Query SearchServer::ParseQuery(const string_view text) const {
             }
         }
     }
-    sort(execution::par, result.minus_words.begin(), result.minus_words.end());
-    result.minus_words.erase(unique(execution::par, result.minus_words.begin(), result.minus_words.end()), result.minus_words.end());
-    sort(execution::par, result.plus_words.begin(), result.plus_words.end());
-    result.plus_words.erase(unique(execution::par, result.plus_words.begin(), result.plus_words.end()), result.plus_words.end());
+    if (uniquify) {
+        sort(execution::par, result.minus_words.begin(), result.minus_words.end());
+        result.minus_words.erase(unique(execution::par, result.minus_words.begin(), result.minus_words.end()), result.minus_words.end());
+        sort(execution::par, result.plus_words.begin(), result.plus_words.end());
+        result.plus_words.erase(unique(execution::par, result.plus_words.begin(), result.plus_words.end()), result.plus_words.end());
+    }
     return result;
 }
 
