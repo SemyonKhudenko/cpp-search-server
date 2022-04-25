@@ -10,7 +10,6 @@
 #include <map>
 #include <numeric>
 #include <set>
-#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -121,27 +120,10 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_
 // возвращает первые MAX_RESULT_DOCUMENT_COUNT результатов поиска с фильтрацией посредством функции-предиката
 template <typename ExecutionPolicy, typename DocumentPredicate>
 std::vector<Document> SearchServer::FindTopDocuments(ExecutionPolicy&& policy, const std::string_view raw_query, DocumentPredicate document_predicate) const {
-	if constexpr (std::is_same_v<std::decay_t<ExecutionPolicy>, std::execution::sequenced_policy>) {
-		// последовательная  ветка
-		const auto query = ParseQuery(raw_query, true);
-	    auto matched_documents = FindAllDocuments(query, document_predicate);
-	    sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs) {
-	        if (std::abs(lhs.relevance - rhs.relevance) < EPSILON) {
-	            return lhs.rating > rhs.rating;
-	        } else {
-	            return lhs.relevance > rhs.relevance;
-	        }
-	    });
-	    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
-	        matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
-	    }
-	    return matched_documents;
-	}
-	// параллельная  ветка
 	const auto query = ParseQuery(raw_query, true);
-    auto matched_documents = FindAllDocuments(std::execution::par, query, document_predicate);
+    auto matched_documents = FindAllDocuments(policy, query, document_predicate);
     std::sort(
-        std::execution::par,
+        policy,
         matched_documents.begin(),
         matched_documents.end(),
         [](const Document& lhs, const Document& rhs) {
