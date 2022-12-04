@@ -89,7 +89,6 @@ private:
     };
 
     Query ParseQuery(const std::string_view text, bool uniquify = false) const;
-    // Existence required
     double ComputeWordInverseDocumentFreq(const std::string_view word) const;
 
     template <typename DocumentPredicate>
@@ -103,7 +102,7 @@ private:
 // конструктор-шаблон, принимающий на вход произвольный контейнер строк
 template <typename StringContainer>
 SearchServer::SearchServer(const StringContainer& stop_words)
-    : stop_words_(MakeUniqueNonEmptyStrings(stop_words))  // Extract non-empty stop words
+    : stop_words_(MakeUniqueNonEmptyStrings(stop_words))
 {
     if (!all_of(stop_words_.begin(), stop_words_.end(), IsValidWord)) {
         throw std::invalid_argument("Some of stop words are invalid"s);
@@ -264,7 +263,7 @@ void SearchServer::RemoveDocument(ExecutionPolicy&& policy, int document_id) {
     document_id_to_word_freqs_.erase(document_id);
 }
 
-void PrintMatchDocumentResult(int document_id, const std::vector<std::string>& words, DocumentStatus status);
+void PrintMatchDocumentResult(int document_id, const std::vector<std::string_view> words, DocumentStatus status);
 void AddDocument(SearchServer& search_server, int document_id, const std::string& document, DocumentStatus status, const std::vector<int>& ratings);
 void FindTopDocuments(const SearchServer& search_server, const std::string& raw_query);
 void MatchDocuments(const SearchServer& search_server, const std::string& query);

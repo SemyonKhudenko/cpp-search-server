@@ -1,7 +1,6 @@
-#include "search_server.h"
-
 #include "log_duration.h"
 #include "process_queries.h"
+#include "search_server.h"
 
 #include <execution>
 #include <iostream>
@@ -16,7 +15,7 @@ string GenerateWord(mt19937& generator, int max_length) {
     string word;
     word.reserve(length);
     for (int i = 0; i < length; ++i) {
-        word.push_back(uniform_int_distribution('a', 'z')(generator));
+        word.push_back(uniform_int_distribution(int('a'), int('z'))(generator));
     }
     return word;
 }

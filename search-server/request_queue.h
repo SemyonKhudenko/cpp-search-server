@@ -14,13 +14,11 @@ public:
     int GetNoResultRequests() const;
 private:
     struct QueryResult {
-        // определите, что должно быть в структуре
         std::string query;
         std::vector<Document> result;
     };
     std::deque<QueryResult> requests_;
     const static int min_in_day_ = 1440;
-    // возможно, здесь вам понадобится что-то ещё
     const SearchServer& search_server_;
     int current_time_ = 0;
     int empty_requests_ = 0;
